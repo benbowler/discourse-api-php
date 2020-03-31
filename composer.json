@@ -1,0 +1,8 @@
+{
+    "name": "discoursehosting/discourse-api-php",
+    "description": "PHP API client for Discourse by discoursehosting",
+    "type": "library",
+    "license": "GNU General Public License v2.0",
+    "minimum-stability": "stable",
+    "require": {}
+}
