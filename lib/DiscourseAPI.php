@@ -31,7 +31,7 @@ class DiscourseAPI
         $this->_httpAuthPass = $httpAuthPass;
     }
 
-    private function _getRequest($reqString, $paramArray = null, $apiUser = 'system')
+    private function _getRequest($reqString, $paramArray = null, $apiUser = false)
     {
         if ($paramArray == null) {
             $paramArray = array();
@@ -45,16 +45,19 @@ class DiscourseAPI
             http_build_query($paramArray)
         );
 
-        // TODO: move post requests to this auth also
+        // Use the username specified in the init function of the overide if present
+        $authUser = ($apiUser) ? $apiUser : $this->_httpAuthName;
+
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             "Api-Key: " . $this->_apiKey,
-            "Api-Username: $apiUser"
+            "Api-Username: $authUser"
         ]);
 
-        if (!empty($this->_httpAuthName) && !empty($this->_httpAuthPass)) {
-            curl_setopt($ch, CURLOPT_USERPWD, $this->_httpAuthName . ":" . $this->_httpAuthPass);
-            curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        }
+        // Remove old authentication method depricated 1 April 2020
+        // if (!empty($this->_httpAuthName) && !empty($this->_httpAuthPass)) {
+        //     curl_setopt($ch, CURLOPT_USERPWD, $this->_httpAuthName . ":" . $this->_httpAuthPass);
+        //     curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        // }
 
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -68,18 +71,23 @@ class DiscourseAPI
         return $resObj;
     }
 
-    private function _putRequest($reqString, $paramArray, $apiUser = 'system')
+    private function _putRequest($reqString, $paramArray, $apiUser = false)
     {
-        return $this->_putpostRequest($reqString, $paramArray, $apiUser, true);
+        return $this->_alternateMethodRequest($reqString, $paramArray, $apiUser, "PUT");
     }
 
-    private function _postRequest($reqString, $paramArray, $apiUser = 'system')
+    private function _deleteRequest($reqString, $paramArray, $apiUser = false)
     {
-
-        return $this->_putpostRequest($reqString, $paramArray, $apiUser, false);
+        return $this->_alternateMethodRequest($reqString, $paramArray, $apiUser, "DELETE");
     }
 
-    private function _putpostRequest($reqString, $paramArray, $apiUser = 'system', $putMethod = false)
+    private function _postRequest($reqString, $paramArray, $apiUser = false)
+    {
+
+        return $this->_alternateMethodRequest($reqString, $paramArray, $apiUser, false);
+    }
+
+    private function _alternateMethodRequest($reqString, $paramArray, $apiUser = false, $method = false)
     {
 
         $ch = curl_init();
@@ -95,14 +103,23 @@ class DiscourseAPI
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($paramArray));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        if ($putMethod) {
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+        if ($method) {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
         }
 
-        if (!empty($this->_httpAuthName) && !empty($this->_httpAuthPass)) {
-            curl_setopt($ch, CURLOPT_USERPWD, $this->_httpAuthName . ":" . $this->_httpAuthPass);
-            curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
-        }
+        // Use the username specified in the init function of the overide if present
+        $authUser = ($apiUser) ? $apiUser : $this->_httpAuthName;
+
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "Api-Key: " . $this->_apiKey,
+            "Api-Username: $authUser"
+        ]);
+
+        // Remove old authentication method depricated 1 April 2020
+        // if (!empty($this->_httpAuthName) && !empty($this->_httpAuthPass)) {
+        //     curl_setopt($ch, CURLOPT_USERPWD, $this->_httpAuthName . ":" . $this->_httpAuthPass);
+        //     curl_setopt($ch, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+        // }
 
         $body = curl_exec($ch);
         $rc = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -357,16 +374,54 @@ class DiscourseAPI
      * @param string $bodyText     body text of topic post
      * @param string $topicId      topic id - must me a string not array
      * @param string $userName     user to create topic as
+     * @param string $replyToId    (optional) id of post replying to
      *
      * @return mixed HTTP return code and API return object
      */
-    function createPost($bodyText, $topicId, $userName)
+    function createPost($bodyText, $topicId, $userName, $replyToId = false)
     {
         $params = array(
             'raw' => $bodyText,
             'topic_id' => $topicId
         );
+        if ($replyToId) {
+            $params['reply_to_post_number'] = $replyToId;
+        }
+
         return $this->_postRequest('/posts', $params, $userName);
+    }
+
+    /**
+     * likePost
+     */
+    // id: 19
+    // post_action_type_id: 2
+    // flag_topic: false
+    function likePost($postId, $userName = false)
+    {
+        $params = array(
+            'post_action_type_id' => '2',
+            'id' => $postId,
+            'flag_topic' => false
+        );
+
+        return $this->_postRequest('/post_actions', $params, $userName);
+    }
+
+    /**
+     * unLike
+     */
+    // /19
+    //  DELETE
+    //  post_action_type_id: 2
+    // post_actions/31
+    function unlikePost($postId, $userName = false)
+    {
+        $params = array(
+            'post_action_type_id' => '2'
+        );
+
+        return $this->_deleteRequest('/post_actions/' . $postId, $params, $userName);
     }
 
     function inviteUser($email, $topicId, $userName = 'system')
